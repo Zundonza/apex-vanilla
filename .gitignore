@@ -1,0 +1,21 @@
+# Gradle
+.gradle/
+build/
+
+# IDE
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+
+# Minecraft & Toolchain Work directories
+work/
+run/
+cache/
+*.log
+
+# Profiles and large reports
+benchmark/reports/*.html
+benchmark/reports/*.jfr
+!benchmark/reports/.gitkeep

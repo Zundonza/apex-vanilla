@@ -1,0 +1,68 @@
+From 9af4ac6fc2482a671687dc4566cdcf561f843811 Mon Sep 17 00:00:00 2001
+From: Zundonza <97468173+Zundonza@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 19:34:46 +0300
+Subject: [PATCH 2/2] opt(entity): replace tree subset scan with direct section
+ lookup in EntitySectionStorage
+
+---
+ .../level/entity/EntitySectionStorage.java    | 44 +++++++++++++------
+ 1 file changed, 31 insertions(+), 13 deletions(-)
+
+diff --git a/src/net/minecraft/world/level/entity/EntitySectionStorage.java b/src/net/minecraft/world/level/entity/EntitySectionStorage.java
+index 5b01b56..c8342dd 100644
+--- a/src/net/minecraft/world/level/entity/EntitySectionStorage.java
++++ b/src/net/minecraft/world/level/entity/EntitySectionStorage.java
+@@ -42,19 +42,37 @@ public class EntitySectionStorage<T extends EntityAccess> {
+       int yMax = SectionPos.posToSectionCoord(bb.maxY + 0.0);
+       int zMax = SectionPos.posToSectionCoord(bb.maxZ + 2.0);
+ 
+-      for (int x = xMin; x <= xMax; x++) {
+-         long lowestAbsoluteSectionKey = SectionPos.asLong(x, 0, 0);
+-         long highestAbsoluteSectionKey = SectionPos.asLong(x, -1, -1);
+-         LongIterator it = this.sectionIds.subSet(lowestAbsoluteSectionKey, highestAbsoluteSectionKey + 1L).iterator();
+-
+-         while (it.hasNext()) {
+-            long sectionKey = it.nextLong();
+-            int y = SectionPos.y(sectionKey);
+-            int z = SectionPos.z(sectionKey);
+-            if (y >= yMin && y <= yMax && z >= zMin && z <= zMax) {
+-               EntitySection<T> entitySection = (EntitySection<T>)this.sections.get(sectionKey);
+-               if (entitySection != null && !entitySection.isEmpty() && entitySection.getStatus().isAccessible() && output.accept(entitySection).shouldAbort()) {
+-                  return;
++      // Apex-Vanilla optimization: Direct coordinate lookup bypasses tree subset traversal and iterator allocations for small query boxes
++      long totalSections = (long)(xMax - xMin + 1) * (long)(yMax - yMin + 1) * (long)(zMax - zMin + 1);
++      if (totalSections <= 128L || totalSections <= (long)this.sectionIds.size()) {
++         for (int x = xMin; x <= xMax; x++) {
++            for (int z = zMin; z <= zMax; z++) {
++               for (int y = yMin; y <= yMax; y++) {
++                  long sectionKey = SectionPos.asLong(x, y, z);
++                  EntitySection<T> entitySection = (EntitySection<T>)this.sections.get(sectionKey);
++                  if (entitySection != null && !entitySection.isEmpty() && entitySection.getStatus().isAccessible()) {
++                     if (output.accept(entitySection).shouldAbort()) {
++                        return;
++                     }
++                  }
++               }
++            }
++         }
++      } else {
++         for (int x = xMin; x <= xMax; x++) {
++            long lowestAbsoluteSectionKey = SectionPos.asLong(x, 0, 0);
++            long highestAbsoluteSectionKey = SectionPos.asLong(x, -1, -1);
++            LongIterator it = this.sectionIds.subSet(lowestAbsoluteSectionKey, highestAbsoluteSectionKey + 1L).iterator();
++
++            while (it.hasNext()) {
++               long sectionKey = it.nextLong();
++               int y = SectionPos.y(sectionKey);
++               int z = SectionPos.z(sectionKey);
++               if (y >= yMin && y <= yMax && z >= zMin && z <= zMax) {
++                  EntitySection<T> entitySection = (EntitySection<T>)this.sections.get(sectionKey);
++                  if (entitySection != null && !entitySection.isEmpty() && entitySection.getStatus().isAccessible() && output.accept(entitySection).shouldAbort()) {
++                     return;
++                  }
+                }
+             }
+          }
+-- 
+2.51.0.windows.1
+

@@ -1,7 +1,7 @@
 From 00b46dc946aa753b1b356e7712d75d82fb646b52 Mon Sep 17 00:00:00 2001
 From: Zundonza <97468173+Zundonza@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 19:21:19 +0300
-Subject: [PATCH] feat(server): add /bot command for fake player benchmark
+Subject: [PATCH 1/2] feat(server): add /bot command for fake player benchmark
  emulation
 
 ---

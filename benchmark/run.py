@@ -37,7 +37,7 @@ def ensure_profiler():
         import download_profiler
         download_profiler.setup_profiler()
 
-def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600):
+def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600, bots: int = 50):
     ensure_profiler()
     REPORTS_DIR.mkdir(parents=True, exist_ok=True)
     
@@ -48,7 +48,7 @@ def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600):
 
     print(f"\n=======================================================", flush=True)
     print(f"  Starting Benchmark: {name}")
-    print(f"  Warmup: {warmup_ticks} ticks | Test: {test_ticks} ticks")
+    print(f"  Bots: {bots} players | Warmup: {warmup_ticks} ticks | Test: {test_ticks} ticks")
     print(f"=======================================================\n", flush=True)
 
     # Reset world from template
@@ -103,12 +103,17 @@ def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600):
                 break
             
             clean_line = line.strip()
-            if any(k in clean_line for k in ["Done (", "sprint", "Sprint", "tick", "Target", "Server thread", "lagging", "running", "Percentiles"]):
+            if any(k in clean_line for k in ["Done (", "sprint", "Sprint", "tick", "Target", "Server thread", "lagging", "running", "Percentiles", "Bot_"]):
                 print(f"  [server] {clean_line}", flush=True)
 
             if "Done (" in clean_line and not server_ready:
                 server_ready = True
-                print(f"\n[benchmark] Server ready! Warming up JIT compiler for {warmup_ticks} ticks...", flush=True)
+                if bots > 0:
+                    print(f"\n[benchmark] Spawning {bots} player bots for player emulation load...", flush=True)
+                    proc.stdin.write(f"bot spawnmany {bots}\n")
+                    proc.stdin.flush()
+                    time.sleep(2.0)
+                print(f"[benchmark] Server ready! Warming up JIT compiler for {warmup_ticks} ticks...", flush=True)
                 time.sleep(1.0)
                 proc.stdin.write(f"tick sprint {warmup_ticks}\n")
                 proc.stdin.flush()
@@ -248,6 +253,7 @@ if __name__ == "__main__":
     parser.add_argument("--name", default="baseline-vanilla-26.3", help="Name of this benchmark run")
     parser.add_argument("--warmup", type=int, default=150, help="Warmup ticks")
     parser.add_argument("--ticks", type=int, default=800, help="Test measurement ticks")
+    parser.add_argument("--bots", type=int, default=50, help="Number of player bots to spawn (default: 50)")
     args = parser.parse_args()
 
-    run_benchmark(name=args.name, warmup_ticks=args.warmup, test_ticks=args.ticks)
+    run_benchmark(name=args.name, warmup_ticks=args.warmup, test_ticks=args.ticks, bots=args.bots)

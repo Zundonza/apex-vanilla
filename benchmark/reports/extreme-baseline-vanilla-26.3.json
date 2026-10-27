@@ -1,0 +1,19 @@
+{
+  "name": "extreme-baseline-vanilla-26.3",
+  "timestamp": "2026-10-27T19:01:55.505828",
+  "mc_version": "26.3",
+  "warmup_ticks": 150,
+  "test_ticks": 600,
+  "total_elapsed_seconds": 28.25,
+  "metrics": {
+    "avg_mspt": 9.6,
+    "p50_mspt": 9.6,
+    "p95_mspt": 12.0,
+    "p99_mspt": 14.399999999999999,
+    "equivalent_tps": 20.0
+  },
+  "artifacts": {
+    "flamegraph": "D:\\apex-vanilla\\benchmark\\reports\\extreme-baseline-vanilla-26.3-flamegraph.html",
+    "jfr_recording": "D:\\apex-vanilla\\run\\profile.jfr"
+  }
+}

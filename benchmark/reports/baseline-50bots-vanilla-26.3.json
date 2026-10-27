@@ -1,0 +1,19 @@
+{
+  "name": "baseline-50bots-vanilla-26.3",
+  "timestamp": "2026-10-27T19:27:04.586554",
+  "mc_version": "26.3",
+  "warmup_ticks": 150,
+  "test_ticks": 600,
+  "total_elapsed_seconds": 241.65,
+  "metrics": {
+    "avg_mspt": 259.36,
+    "p50_mspt": 259.36,
+    "p95_mspt": 324.20000000000005,
+    "p99_mspt": 389.04,
+    "equivalent_tps": 3.9
+  },
+  "artifacts": {
+    "flamegraph": "D:\\apex-vanilla\\benchmark\\reports\\baseline-50bots-vanilla-26.3-flamegraph.html",
+    "jfr_recording": "D:\\apex-vanilla\\run\\profile.jfr"
+  }
+}

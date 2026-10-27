@@ -1,0 +1,152 @@
+From 00b46dc946aa753b1b356e7712d75d82fb646b52 Mon Sep 17 00:00:00 2001
+From: Zundonza <97468173+Zundonza@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 19:21:19 +0300
+Subject: [PATCH] feat(server): add /bot command for fake player benchmark
+ emulation
+
+---
+ .gitignore                                    |   1 +
+ src/net/minecraft/commands/Commands.java      |   2 +
+ .../minecraft/server/commands/BotCommand.java | 102 ++++++++++++++++++
+ 3 files changed, 105 insertions(+)
+ create mode 100644 .gitignore
+ create mode 100644 src/net/minecraft/server/commands/BotCommand.java
+
+diff --git a/.gitignore b/.gitignore
+new file mode 100644
+index 0000000..e660fd9
+--- /dev/null
++++ b/.gitignore
+@@ -0,0 +1 @@
++bin/
+diff --git a/src/net/minecraft/commands/Commands.java b/src/net/minecraft/commands/Commands.java
+index bcf7459..f74dda2 100644
+--- a/src/net/minecraft/commands/Commands.java
++++ b/src/net/minecraft/commands/Commands.java
+@@ -50,6 +50,7 @@ import net.minecraft.server.commands.BanIpCommands;
+ import net.minecraft.server.commands.BanListCommands;
+ import net.minecraft.server.commands.BanPlayerCommands;
+ import net.minecraft.server.commands.BossBarCommands;
++import net.minecraft.server.commands.BotCommand;
+ import net.minecraft.server.commands.ChaseCommand;
+ import net.minecraft.server.commands.ClearInventoryCommands;
+ import net.minecraft.server.commands.CloneCommands;
+@@ -208,6 +209,7 @@ public class Commands {
+       EmoteCommands.register(this.dispatcher);
+       EnchantCommand.register(this.dispatcher, context);
+       ExperienceCommand.register(this.dispatcher);
++      BotCommand.register(this.dispatcher);
+       FillCommand.register(this.dispatcher, context);
+       FillBiomeCommand.register(this.dispatcher, context);
+       ForceLoadCommand.register(this.dispatcher);
+diff --git a/src/net/minecraft/server/commands/BotCommand.java b/src/net/minecraft/server/commands/BotCommand.java
+new file mode 100644
+index 0000000..63808a7
+--- /dev/null
++++ b/src/net/minecraft/server/commands/BotCommand.java
+@@ -0,0 +1,102 @@
++package net.minecraft.server.commands;
++
++import com.mojang.authlib.GameProfile;
++import com.mojang.brigadier.CommandDispatcher;
++import com.mojang.brigadier.arguments.IntegerArgumentType;
++import io.netty.channel.ChannelFutureListener;
++import io.netty.channel.embedded.EmbeddedChannel;
++import java.net.InetSocketAddress;
++import java.net.SocketAddress;
++import java.util.ArrayList;
++import java.util.List;
++import java.util.UUID;
++import net.minecraft.commands.CommandSourceStack;
++import net.minecraft.commands.Commands;
++import net.minecraft.core.BlockPos;
++import net.minecraft.network.Connection;
++import net.minecraft.network.chat.Component;
++import net.minecraft.network.protocol.Packet;
++import net.minecraft.network.protocol.PacketFlow;
++import net.minecraft.server.MinecraftServer;
++import net.minecraft.server.level.ClientInformation;
++import net.minecraft.server.level.ServerLevel;
++import net.minecraft.server.level.ServerPlayer;
++import net.minecraft.server.network.CommonListenerCookie;
++import org.jspecify.annotations.Nullable;
++
++public class BotCommand {
++   private static final List<ServerPlayer> activeBots = new ArrayList<>();
++
++   public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
++      dispatcher.register(
++         Commands.literal("bot")
++            .requires(Commands.hasPermission(Commands.LEVEL_ADMINS))
++            .then(Commands.literal("spawnmany")
++               .then(Commands.argument("count", IntegerArgumentType.integer(1, 200))
++                  .executes(c -> spawnMany(c.getSource(), IntegerArgumentType.getInteger(c, "count")))))
++            .then(Commands.literal("removeall")
++               .executes(c -> removeAll(c.getSource())))
++      );
++   }
++
++   public static int spawnMany(CommandSourceStack source, int count) {
++      MinecraftServer server = source.getServer();
++      ServerLevel level = source.getLevel();
++      for (int i = 0; i < count; i++) {
++         String name = "Bot_" + (i + 1);
++         UUID uuid = UUID.nameUUIDFromBytes(("OfflinePlayer:" + name).getBytes());
++         GameProfile profile = new GameProfile(uuid, name);
++         ServerPlayer bot = new ServerPlayer(server, level, profile, ClientInformation.createDefault());
++         
++         double x = (i % 10) * 16 - 80;
++         double z = (i / 10) * 16 - 80;
++         bot.setPos(x, -6.0, z);
++         
++         FakeConnection connection = new FakeConnection();
++         CommonListenerCookie cookie = CommonListenerCookie.createInitial(profile, false);
++         server.getPlayerList().placeNewPlayer(connection, bot, cookie);
++         activeBots.add(bot);
++      }
++      source.sendSuccess(() -> Component.literal("Successfully spawned " + count + " player bots across chunks."), true);
++      return count;
++   }
++
++   public static int removeAll(CommandSourceStack source) {
++      int removed = activeBots.size();
++      for (ServerPlayer bot : new ArrayList<>(activeBots)) {
++         bot.connection.disconnect(Component.literal("Bot despawned"));
++      }
++      activeBots.clear();
++      source.sendSuccess(() -> Component.literal("Removed " + removed + " bots."), true);
++      return removed;
++   }
++
++   public static class FakeConnection extends Connection {
++      public FakeConnection() {
++         super(PacketFlow.SERVERBOUND);
++         try {
++            java.lang.reflect.Field channelField = Connection.class.getDeclaredField("channel");
++            channelField.setAccessible(true);
++            channelField.set(this, new EmbeddedChannel());
++         } catch (Exception e) {
++            throw new RuntimeException(e);
++         }
++      }
++      @Override
++      public boolean isConnected() {
++         return true;
++      }
++      @Override
++      public void send(Packet<?> packet, @Nullable ChannelFutureListener listener, boolean flush) {
++         // Packet sink
++      }
++      @Override
++      public void send(Packet<?> packet) {
++         // Packet sink
++      }
++      @Override
++      public SocketAddress getRemoteAddress() {
++         return new InetSocketAddress("127.0.0.1", 0);
++      }
++   }
++}
+-- 
+2.51.0.windows.1
+

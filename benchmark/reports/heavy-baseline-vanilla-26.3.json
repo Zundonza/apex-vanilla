@@ -1,0 +1,19 @@
+{
+  "name": "heavy-baseline-vanilla-26.3",
+  "timestamp": "2026-10-27T18:59:59.749291",
+  "mc_version": "26.3",
+  "warmup_ticks": 150,
+  "test_ticks": 800,
+  "total_elapsed_seconds": 34.19,
+  "metrics": {
+    "avg_mspt": 13.82,
+    "p50_mspt": 13.82,
+    "p95_mspt": 17.275,
+    "p99_mspt": 20.73,
+    "equivalent_tps": 20.0
+  },
+  "artifacts": {
+    "flamegraph": "D:\\apex-vanilla\\benchmark\\reports\\heavy-baseline-vanilla-26.3-flamegraph.html",
+    "jfr_recording": "D:\\apex-vanilla\\run\\profile.jfr"
+  }
+}

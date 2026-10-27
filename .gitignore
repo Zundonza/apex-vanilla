@@ -18,4 +18,6 @@ cache/
 # Profiles and large reports
 benchmark/reports/*.html
 benchmark/reports/*.jfr
+benchmark/world-template/
+tools/profiler/*.jar
 !benchmark/reports/.gitkeep

@@ -141,6 +141,7 @@ def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600, bot
                     print(f"[benchmark] Starting test measurement: {test_ticks} sprint ticks...", flush=True)
                     time.sleep(0.5)
                     test_started = True
+                    test_start_time = time.time()
                     proc.stdin.write(f"tick sprint {test_ticks}\n")
                     proc.stdin.flush()
 
@@ -175,8 +176,14 @@ def run_benchmark(name: str, warmup_ticks: int = 150, test_ticks: int = 600, bot
                 if m95: p95_mspt = float(m95.group(1))
                 if m99: p99_mspt = float(m99.group(1))
 
-            if time.time() - start_time > 180:
-                print("[benchmark] Timeout exceeded! Forcing shutdown...", flush=True)
+            if test_started:
+                if time.time() - test_start_time > 300:
+                    print("[benchmark] Test sprint timeout exceeded! Forcing shutdown...", flush=True)
+                    proc.stdin.write("stop\n")
+                    proc.stdin.flush()
+                    break
+            elif time.time() - start_time > 180:
+                print("[benchmark] Warmup timeout exceeded! Forcing shutdown...", flush=True)
                 proc.stdin.write("stop\n")
                 proc.stdin.flush()
                 break

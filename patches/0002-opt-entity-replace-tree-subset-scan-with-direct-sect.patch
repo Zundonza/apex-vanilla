@@ -1,7 +1,7 @@
 From 9af4ac6fc2482a671687dc4566cdcf561f843811 Mon Sep 17 00:00:00 2001
 From: Zundonza <97468173+Zundonza@users.noreply.github.com>
 Date: Tue, 27 Oct 2026 19:34:46 +0300
-Subject: [PATCH 2/2] opt(entity): replace tree subset scan with direct section
+Subject: [PATCH 2/3] opt(entity): replace tree subset scan with direct section
  lookup in EntitySectionStorage
 
 ---

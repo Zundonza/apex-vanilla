@@ -1,0 +1,19 @@
+{
+  "name": "opt-zero-alloc-entity-iteration",
+  "timestamp": "2026-10-27T19:54:57.745059",
+  "mc_version": "26.3",
+  "warmup_ticks": 150,
+  "test_ticks": 600,
+  "total_elapsed_seconds": 220.23,
+  "metrics": {
+    "avg_mspt": 234.83,
+    "p50_mspt": 234.83,
+    "p95_mspt": 293.5375,
+    "p99_mspt": 352.245,
+    "equivalent_tps": 4.3
+  },
+  "artifacts": {
+    "flamegraph": "D:\\apex-vanilla\\benchmark\\reports\\opt-zero-alloc-entity-iteration-flamegraph.html",
+    "jfr_recording": "D:\\apex-vanilla\\run\\profile.jfr"
+  }
+}

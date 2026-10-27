@@ -1,0 +1,165 @@
+From b92431a7e75148a596eb153be584de0a230b47a5 Mon Sep 17 00:00:00 2001
+From: Zundonza <97468173+Zundonza@users.noreply.github.com>
+Date: Tue, 27 Oct 2026 19:46:39 +0300
+Subject: [PATCH 3/3] opt(entity): zero-allocation entity iteration and
+ flattened collision predicates
+
+---
+ .../minecraft/util/ClassInstanceMultiMap.java | 12 ++++++
+ .../world/entity/EntitySelector.java          | 42 +++++++++----------
+ .../minecraft/world/level/EntityGetter.java   |  4 +-
+ src/net/minecraft/world/level/Level.java      |  9 ++--
+ .../world/level/entity/EntitySection.java     | 13 ++++--
+ 5 files changed, 51 insertions(+), 29 deletions(-)
+
+diff --git a/src/net/minecraft/util/ClassInstanceMultiMap.java b/src/net/minecraft/util/ClassInstanceMultiMap.java
+index 0940b51..63ea95f 100644
+--- a/src/net/minecraft/util/ClassInstanceMultiMap.java
++++ b/src/net/minecraft/util/ClassInstanceMultiMap.java
+@@ -72,6 +72,18 @@ public class ClassInstanceMultiMap<T> extends AbstractCollection<T> {
+       return ImmutableList.copyOf(this.allInstances);
+    }
+ 
++   public List<T> getRawInstances() {
++      return this.allInstances;
++   }
++
++   public <S> List<? extends T> findRawList(final Class<S> index) {
++      if (!this.baseClass.isAssignableFrom(index)) {
++         throw new IllegalArgumentException("Don't know how to search for " + index);
++      }
++
++      return this.byClass.computeIfAbsent(index, k -> this.allInstances.stream().filter(k::isInstance).collect(Util.toMutableList()));
++   }
++
+    @Override
+    public int size() {
+       return this.allInstances.size();
+diff --git a/src/net/minecraft/world/entity/EntitySelector.java b/src/net/minecraft/world/entity/EntitySelector.java
+index 3038806..4188cab 100644
+--- a/src/net/minecraft/world/entity/EntitySelector.java
++++ b/src/net/minecraft/world/entity/EntitySelector.java
+@@ -29,30 +29,30 @@ public final class EntitySelector {
+    public static Predicate<Entity> pushableBy(final Entity entity) {
+       Team ownTeam = entity.getTeam();
+       Team.CollisionRule ownCollisionRule = ownTeam == null ? Team.CollisionRule.ALWAYS : ownTeam.getCollisionRule();
+-      return (Predicate<Entity>)(ownCollisionRule == Team.CollisionRule.NEVER
+-         ? Predicates.alwaysFalse()
+-         : NO_SPECTATORS.and(
+-            input -> {
+-               if (!input.isPushable()) {
+-                  return false;
+-               }
++      if (ownCollisionRule == Team.CollisionRule.NEVER) {
++         return Predicates.alwaysFalse();
++      }
+ 
+-               if (!entity.level().isClientSide() || input instanceof Player player && player.isLocalPlayer()) {
+-                  Team theirTeam = input.getTeam();
+-                  Team.CollisionRule theirCollisionRule = theirTeam == null ? Team.CollisionRule.ALWAYS : theirTeam.getCollisionRule();
+-                  if (theirCollisionRule == Team.CollisionRule.NEVER) {
+-                     return false;
+-                  }
++      return input -> {
++         if (input.isSpectator() || !input.isPushable()) {
++            return false;
++         }
+ 
+-                  boolean sameTeam = ownTeam != null && ownTeam.isAlliedTo(theirTeam);
+-                  return (ownCollisionRule == Team.CollisionRule.PUSH_OWN_TEAM || theirCollisionRule == Team.CollisionRule.PUSH_OWN_TEAM) && sameTeam
+-                     ? false
+-                     : ownCollisionRule != Team.CollisionRule.PUSH_OTHER_TEAMS && theirCollisionRule != Team.CollisionRule.PUSH_OTHER_TEAMS || sameTeam;
+-               } else {
+-                  return false;
+-               }
++         if (!entity.level().isClientSide() || input instanceof Player player && player.isLocalPlayer()) {
++            Team theirTeam = input.getTeam();
++            Team.CollisionRule theirCollisionRule = theirTeam == null ? Team.CollisionRule.ALWAYS : theirTeam.getCollisionRule();
++            if (theirCollisionRule == Team.CollisionRule.NEVER) {
++               return false;
+             }
+-         ));
++
++            boolean sameTeam = ownTeam != null && ownTeam.isAlliedTo(theirTeam);
++            return (ownCollisionRule == Team.CollisionRule.PUSH_OWN_TEAM || theirCollisionRule == Team.CollisionRule.PUSH_OWN_TEAM) && sameTeam
++               ? false
++               : ownCollisionRule != Team.CollisionRule.PUSH_OTHER_TEAMS && theirCollisionRule != Team.CollisionRule.PUSH_OTHER_TEAMS || sameTeam;
++         } else {
++            return false;
++         }
++      };
+    }
+ 
+    public static Predicate<Entity> notRiding(final Entity entity) {
+diff --git a/src/net/minecraft/world/level/EntityGetter.java b/src/net/minecraft/world/level/EntityGetter.java
+index d9e6d3b..8967520 100644
+--- a/src/net/minecraft/world/level/EntityGetter.java
++++ b/src/net/minecraft/world/level/EntityGetter.java
+@@ -56,7 +56,9 @@ public interface EntityGetter {
+          return List.of();
+       }
+ 
+-      Predicate<Entity> canCollide = source == null ? EntitySelector.CAN_BE_COLLIDED_WITH : EntitySelector.NO_SPECTATORS.and(source::canCollideWith);
++      Predicate<Entity> canCollide = source == null
++         ? EntitySelector.CAN_BE_COLLIDED_WITH
++         : (e -> !e.isSpectator() && source.canCollideWith(e));
+       List<Entity> collidingEntities = this.getEntities(source, testArea.inflate(1.0E-7), canCollide);
+       if (collidingEntities.isEmpty()) {
+          return List.of();
+diff --git a/src/net/minecraft/world/level/Level.java b/src/net/minecraft/world/level/Level.java
+index ffdb5dd..0b4bd0f 100644
+--- a/src/net/minecraft/world/level/Level.java
++++ b/src/net/minecraft/world/level/Level.java
+@@ -772,9 +772,12 @@ public abstract class Level implements LevelAccessor, AutoCloseable {
+          }
+       });
+ 
+-      for (EnderDragonPart dragonPart : this.dragonParts()) {
+-         if (dragonPart != except && dragonPart.parentMob != except && selector.test(dragonPart) && bb.intersects(dragonPart.getBoundingBox())) {
+-            output.add(dragonPart);
++      Collection<EnderDragonPart> parts = this.dragonParts();
++      if (!parts.isEmpty()) {
++         for (EnderDragonPart dragonPart : parts) {
++            if (dragonPart != except && dragonPart.parentMob != except && selector.test(dragonPart) && bb.intersects(dragonPart.getBoundingBox())) {
++               output.add(dragonPart);
++            }
+          }
+       }
+ 
+diff --git a/src/net/minecraft/world/level/entity/EntitySection.java b/src/net/minecraft/world/level/entity/EntitySection.java
+index e567c47..c0006b1 100644
+--- a/src/net/minecraft/world/level/entity/EntitySection.java
++++ b/src/net/minecraft/world/level/entity/EntitySection.java
+@@ -29,7 +29,10 @@ public class EntitySection<T extends EntityAccess> {
+    }
+ 
+    public Continuation getEntities(final AABB bb, final AbortableIterationConsumer<T> entities) {
+-      for (T entity : this.storage) {
++      java.util.List<T> list = this.storage.getRawInstances();
++      int size = list.size();
++      for (int i = 0; i < size; i++) {
++         T entity = list.get(i);
+          if (entity.getBoundingBox().intersects(bb) && entities.accept(entity).shouldAbort()) {
+             return Continuation.ABORT;
+          }
+@@ -39,12 +42,14 @@ public class EntitySection<T extends EntityAccess> {
+    }
+ 
+    public <U extends T> Continuation getEntities(final EntityTypeTest<T, U> type, final AABB bb, final AbortableIterationConsumer<? super U> consumer) {
+-      Collection<? extends T> foundEntities = this.storage.find(type.getBaseClass());
+-      if (foundEntities.isEmpty()) {
++      java.util.List<? extends T> foundEntities = this.storage.findRawList(type.getBaseClass());
++      int size = foundEntities.size();
++      if (size == 0) {
+          return Continuation.CONTINUE;
+       }
+ 
+-      for (T entity : foundEntities) {
++      for (int i = 0; i < size; i++) {
++         T entity = foundEntities.get(i);
+          U maybeEntity = (U)type.tryCast(entity);
+          if (maybeEntity != null && entity.getBoundingBox().intersects(bb) && consumer.accept(maybeEntity).shouldAbort()) {
+             return Continuation.ABORT;
+-- 
+2.51.0.windows.1
+
